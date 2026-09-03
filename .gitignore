@@ -1,0 +1,6 @@
+.streamlit/secrets.toml
+__pycache__/
+*.log
+deals_raw.csv
+trades_clean.csv
+equity_curve.png
