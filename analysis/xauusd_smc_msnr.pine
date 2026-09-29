@@ -53,12 +53,12 @@ cGray   = #9a998f
 f_zone(top, bot, col, txt) =>
     box.new(tZone, top, time, bot, xloc = xloc.bar_time, extend = extend.right,
          border_color = color.new(col, 60), bgcolor = color.new(col, 85),
-         text = txt, text_size = size.small, text_color = col, text_halign = text.align.right)
+         text = txt, text_size = size.small, text_color = col, text_halign = text.align_right)
 
 f_level(y, col, txt, sty) =>
     line.new(bar_index - 1, y, bar_index, y, extend = extend.both, color = col, style = sty)
     label.new(bar_index + 2, y, txt + "  " + str.tostring(y, "#.##"), style = label.style_none,
-         textcolor = col, size = size.small, textalign = text.align.left)
+         textcolor = col, size = size.small, textalign = text.align_left)
 
 f_trade(y, col, txt, x0) =>
     line.new(x0, y, x0 + 25, y, color = col, width = 2)
