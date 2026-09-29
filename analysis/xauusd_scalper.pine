@@ -30,13 +30,6 @@ sweepWin = input.int(12, "CHoCH ต้องเกิดภายใน N แท
 zoneWin  = input.int(30, "ต้องแตะโซนภายใน N แท่งล่าสุด", minval = 1, group = gS)
 useZone  = input.bool(true, "กรองด้วยโซน (ปิด = ทุกจุดที่เกิด sweep + CHoCH)", group = gS)
 
-// ---------- เวลาเทรด (เวลาไทย) ----------
-gT      = "เวลาเทรด"
-useSess = input.bool(true, "จำกัดเวลาเทรด", group = gT)
-sess1   = input.session("1400-1700", "ช่วงที่ 1 (London)", group = gT)
-sess2   = input.session("1930-2300", "ช่วงที่ 2 (New York)", group = gT)
-tz      = input.string("Asia/Bangkok", "Timezone", group = gT)
-
 // ---------- โซนจาก TF ใหญ่ ----------
 gZ    = "โซน (ปรับให้ตรงกราฟโบรกเกอร์)"
 sTop  = input.float(4305, "Sell zone บน (Bearish OB)",   group = gZ)
@@ -70,8 +63,6 @@ bias     = tfOk ? (htfClose > htfEma ? 1 : htfClose < htfEma ? -1 : 0) : 0
 
 allowSell = mode == "Both sides" or mode == "Sell only" or (mode == "Follow HTF trend" and bias < 0)
 allowBuy  = mode == "Both sides" or mode == "Buy only"  or (mode == "Follow HTF trend" and bias > 0)
-
-inSess = not useSess or not na(time(timeframe.period, sess1, tz)) or not na(time(timeframe.period, sess2, tz))
 
 // ---------- โซนถูกแตะเมื่อไม่นานมานี้ ----------
 touchedSell = nz(ta.barssince(high >= sBot and low <= sTop), 99999) < zoneWin
@@ -141,8 +132,8 @@ highLive = not na(swHighBar) and bar_index - swHighBar <= sweepWin and swHighOk
 bullChoch = not na(lastPH) and close > lastPH and close[1] <= lastPH
 bearChoch = not na(lastPL) and close < lastPL and close[1] >= lastPL
 
-buySig  = barstate.isconfirmed and lowLive  and bullChoch and allowBuy  and inSess and (not useZone or swLowZone)
-sellSig = barstate.isconfirmed and highLive and bearChoch and allowSell and inSess and (not useZone or swHighZone)
+buySig  = barstate.isconfirmed and lowLive  and bullChoch and allowBuy  and (not useZone or swLowZone)
+sellSig = barstate.isconfirmed and highLive and bearChoch and allowSell and (not useZone or swHighZone)
 
 // ---------- วาด Entry / SL / TP ----------
 f_px(x) =>
@@ -195,15 +186,14 @@ if sellSig
 // ---------- ตารางสถานะ ----------
 atrPts  = ta.atr(14) / pt
 biasTxt = not tfOk ? "Bias TF ใหญ่: ใช้ไม่ได้ (TF กราฟใหญ่กว่า TF ที่เลือก)" : bias > 0 ? "Bias TF ใหญ่: ขึ้น (Buy)" : bias < 0 ? "Bias TF ใหญ่: ลง (Sell)" : "Bias TF ใหญ่: เป็นกลาง"
-var table t = table.new(position.top_center, 1, 5, bgcolor = color.new(color.gray, 80))
+var table t = table.new(position.top_center, 1, 4, bgcolor = color.new(color.gray, 80))
 if barstate.islast
     atrOk = atrPts <= slMax * 1.5
     table.cell(t, 0, 0, "ATR(14) TF นี้ = " + str.tostring(atrPts, "#") + " pts" + (atrOk ? "" : "  ⚠ ใช้ TF เล็กลง"), text_color = atrOk ? color.gray : cRed, text_size = size.small)
     table.cell(t, 0, 1, biasTxt, text_color = bias > 0 ? cGreen : bias < 0 ? cRed : color.gray, text_size = size.small)
-    table.cell(t, 0, 2, inSess ? "อยู่ในช่วงเวลาเทรด" : "นอกช่วงเวลาเทรด (ไม่ส่งสัญญาณ)", text_color = inSess ? cGreen : color.gray, text_size = size.small)
-    table.cell(t, 0, 3, "พบ sweep: ต่ำ " + str.tostring(nSwL) + " / สูง " + str.tostring(nSwH) + "  |  สัญญาณ: Buy " + str.tostring(nBuy) + " / Sell " + str.tostring(nSell) + " (ทั้งกราฟ)", text_color = color.gray, text_size = size.small)
+    table.cell(t, 0, 2, "พบ sweep: ต่ำ " + str.tostring(nSwL) + " / สูง " + str.tostring(nSwH) + "  |  สัญญาณ: Buy " + str.tostring(nBuy) + " / Sell " + str.tostring(nSell) + " (ทั้งกราฟ)", text_color = color.gray, text_size = size.small)
     stTxt = lowLive ? "สถานะ: sweep ต่ำเมื่อ " + str.tostring(bar_index - swLowBar) + " แท่งก่อน รอ CHoCH ขึ้น" : highLive ? "สถานะ: sweep สูงเมื่อ " + str.tostring(bar_index - swHighBar) + " แท่งก่อน รอ CHoCH ลง" : "สถานะ: รอ sweep"
-    table.cell(t, 0, 4, stTxt, text_color = (lowLive or highLive) ? cBlue : color.gray, text_size = size.small)
+    table.cell(t, 0, 3, stTxt, text_color = (lowLive or highLive) ? cBlue : color.gray, text_size = size.small)
 
 plotshape(sweptLow  and barstate.isconfirmed, "Sweep low",  shape.diamond, location.belowbar, color.new(cBlue, 30), size = size.tiny)
 plotshape(sweptHigh and barstate.isconfirmed, "Sweep high", shape.diamond, location.abovebar, color.new(cRed, 30),  size = size.tiny)
