@@ -1,0 +1,131 @@
+//@version=5
+// XAUUSD Sniper Entry — หาจุดเข้าใน TF เล็ก (M1/M5) ภายในโซน SMC/MSNR จาก TF ใหญ่ โดยบังคับ SL ให้อยู่ในช่วง 300–500 points
+// ตรรกะ: ราคาเข้าโซน → เกิด CHoCH ใน TF เล็ก (ปิดทะลุ swing ล่าสุด) → วาง SL เหนือ/ใต้ extreme ในโซน + buffer
+//   - ถ้า SL จากราคาปิด > 500 pts → ตั้ง Limit order ที่ SL - 500 pts (รอราคาย้อน = จุดเข้าที่คมกว่า)
+//   - ถ้า SL < 300 pts → ขยาย SL เป็น 300 pts
+// ใช้ข้อมูลจริงบนกราฟโบรกเกอร์ของคุณ ระดับโซนเริ่มต้นประมาณจากกราฟรายวัน (±$30) ให้ปรับให้ตรงกับกราฟของคุณ
+// ไม่ใช่คำแนะนำการลงทุน
+indicator("XAUUSD Sniper Entry (SMC + MSNR)", overlay = true, max_lines_count = 300, max_labels_count = 200)
+
+// ---------- ความเสี่ยง ----------
+gR    = "ความเสี่ยง"
+pt    = input.float(0.01, "ขนาด 1 point (MT5 ทอง 2 ทศนิยม = 0.01)", group = gR)
+slMin = input.int(300, "SL ต่ำสุด (points)", group = gR)
+slMax = input.int(500, "SL สูงสุด (points)", group = gR)
+buf   = input.int(50,  "Buffer เหนือ/ใต้ swing (points)", group = gR)
+rr1   = input.float(2.0, "TP1 = RR", group = gR)
+rr2   = input.float(3.0, "TP2 = RR", group = gR)
+
+// ---------- สัญญาณ ----------
+gS       = "สัญญาณ"
+mode     = input.string("ทั้งสองฝั่ง", "ฝั่งที่เทรด", options = ["ทั้งสองฝั่ง", "Sell เท่านั้น", "Buy เท่านั้น"], group = gS)
+pivLen   = input.int(3, "ความยาว swing (แท่ง)", minval = 1, group = gS)
+lookback = input.int(20, "ต้องแตะโซนภายใน N แท่งล่าสุด", minval = 1, group = gS)
+useZone  = input.bool(true, "กรองด้วยโซน (ปิด = ทุก CHoCH)", group = gS)
+
+// ---------- โซนจาก TF ใหญ่ ----------
+gZ    = "โซน (ปรับให้ตรงกราฟโบรกเกอร์)"
+sTop  = input.float(4305, "Sell zone บน (Bearish OB)",   group = gZ)
+sBot  = input.float(4166, "Sell zone ล่าง (Bearish FVG)", group = gZ)
+b1Top = input.float(4140, "Buy zone 1 บน (MSNR flip)",  group = gZ)
+b1Bot = input.float(4119, "Buy zone 1 ล่าง",            group = gZ)
+b2Top = input.float(4081, "Buy zone 2 บน (Bullish OB+FVG)", group = gZ)
+b2Bot = input.float(4027, "Buy zone 2 ล่าง",                group = gZ)
+
+cRed   = #e34948
+cBlue  = #2a78d6
+cGreen = #1baf7a
+cGray  = #9a998f
+
+hS1 = hline(sTop,  "Sell zone บน",  color = color.new(cRed, 60),  linestyle = hline.style_dotted)
+hS2 = hline(sBot,  "Sell zone ล่าง", color = color.new(cRed, 60),  linestyle = hline.style_dotted)
+hB1 = hline(b1Top, "Buy1 บน",       color = color.new(cBlue, 60), linestyle = hline.style_dotted)
+hB2 = hline(b1Bot, "Buy1 ล่าง",      color = color.new(cBlue, 60), linestyle = hline.style_dotted)
+hB3 = hline(b2Top, "Buy2 บน",       color = color.new(cGreen, 60), linestyle = hline.style_dotted)
+hB4 = hline(b2Bot, "Buy2 ล่าง",      color = color.new(cGreen, 60), linestyle = hline.style_dotted)
+fill(hS1, hS2, color = color.new(cRed, 90))
+fill(hB1, hB2, color = color.new(cBlue, 88))
+fill(hB3, hB4, color = color.new(cGreen, 90))
+
+// ---------- โครงสร้าง TF เล็ก ----------
+ph = ta.pivothigh(high, pivLen, pivLen)
+pl = ta.pivotlow(low, pivLen, pivLen)
+var float lastSH = na
+var float lastSL = na
+if not na(ph)
+    lastSH := ph
+if not na(pl)
+    lastSL := pl
+
+hiN = ta.highest(high, lookback)
+loN = ta.lowest(low, lookback)
+touchedSell = nz(ta.barssince(high >= sBot and low <= sTop), 99999) < lookback
+touchedBuy  = nz(ta.barssince((low <= b1Top and high >= b1Bot) or (low <= b2Top and high >= b2Bot)), 99999) < lookback
+
+allowSell = mode != "Buy เท่านั้น"
+allowBuy  = mode != "Sell เท่านั้น"
+
+bearChoch = not na(lastSL) and close < lastSL and close[1] >= lastSL
+bullChoch = not na(lastSH) and close > lastSH and close[1] <= lastSH
+
+sellSig = barstate.isconfirmed and bearChoch and allowSell and (not useZone or touchedSell)
+buySig  = barstate.isconfirmed and bullChoch and allowBuy  and (not useZone or touchedBuy)
+
+f_px(x) =>
+    str.tostring(x, format.mintick)
+
+f_draw(entry, sl, tp1, tp2, kind, isSell) =>
+    col = isSell ? cRed : cBlue
+    x2  = bar_index + 20
+    line.new(bar_index, entry, x2, entry, color = col, width = 2)
+    line.new(bar_index, sl,    x2, sl,    color = cRed, style = line.style_dashed)
+    line.new(bar_index, tp1,   x2, tp1,   color = cGreen)
+    line.new(bar_index, tp2,   x2, tp2,   color = cGreen, style = line.style_dotted)
+    riskPts = math.abs(sl - entry) / pt
+    txt = kind + "\nEntry " + f_px(entry) + "\nSL " + f_px(sl) + " (" + str.tostring(riskPts, "#") + " pts)" +
+         "\nTP1 " + f_px(tp1) + " (RR " + str.tostring(rr1, "#.#") + ")" +
+         "\nTP2 " + f_px(tp2) + " (RR " + str.tostring(rr2, "#.#") + ")"
+    label.new(bar_index, sl, txt, style = isSell ? label.style_label_down : label.style_label_up,
+         color = col, textcolor = color.white, size = size.small)
+    txt
+
+if sellSig
+    sl    = hiN + buf * pt
+    entry = close
+    kind  = "SELL (market)"
+    if sl - entry > slMax * pt
+        entry := sl - slMax * pt
+        kind  := "SELL LIMIT"
+    else if sl - entry < slMin * pt
+        sl := entry + slMin * pt
+    risk = sl - entry
+    msg = f_draw(entry, sl, entry - risk * rr1, entry - risk * rr2, kind, true)
+    alert("XAUUSD " + msg, alert.freq_once_per_bar_close)
+    lastSL := na
+
+if buySig
+    sl    = loN - buf * pt
+    entry = close
+    kind  = "BUY (market)"
+    if entry - sl > slMax * pt
+        entry := sl + slMax * pt
+        kind  := "BUY LIMIT"
+    else if entry - sl < slMin * pt
+        sl := entry - slMin * pt
+    risk = entry - sl
+    msg = f_draw(entry, sl, entry + risk * rr1, entry + risk * rr2, kind, false)
+    alert("XAUUSD " + msg, alert.freq_once_per_bar_close)
+    lastSH := na
+
+// ---------- ตาราง: SL 300–500 pts สมจริงแค่ไหนใน TF นี้ ----------
+atrPts = ta.atr(14) / pt
+var table t = table.new(position.top_right, 1, 2, bgcolor = color.new(color.gray, 85))
+if barstate.islast
+    table.cell(t, 0, 0, "ATR(14) TF นี้ = " + str.tostring(atrPts, "#") + " pts", text_color = color.gray, text_size = size.small)
+    warn = atrPts > slMax ? "⚠ ATR > SL สูงสุด: ใช้ TF เล็กลง" : "SL " + str.tostring(slMin) + "–" + str.tostring(slMax) + " pts ใช้ได้กับ TF นี้"
+    table.cell(t, 0, 1, warn, text_color = atrPts > slMax ? cRed : cGreen, text_size = size.small)
+
+plotshape(sellSig, "Sell signal", shape.triangledown, location.abovebar, cRed,  size = size.tiny)
+plotshape(buySig,  "Buy signal",  shape.triangleup,   location.belowbar, cBlue, size = size.tiny)
+alertcondition(sellSig, "Sniper SELL", "XAUUSD: Bearish CHoCH ในโซน Sell")
+alertcondition(buySig,  "Sniper BUY",  "XAUUSD: Bullish CHoCH ในโซน Buy")
