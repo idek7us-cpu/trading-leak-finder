@@ -1,0 +1,102 @@
+//@version=5
+// XAUUSD SMC + MSNR levels — จากการวิเคราะห์กราฟรายวัน ณ 29 ก.ย. 2026
+// ระดับทั้งหมดประมาณจาก GLD ETF x 10.92 (คลาดได้ราว ±$30) ปรับให้ตรงราคาโบรกเกอร์ได้ในหน้า Settings
+// ไม่ใช่คำแนะนำการลงทุน เป็นเพียงระดับอ้างอิงจากการอ่านกราฟ
+indicator("XAUUSD SMC + MSNR levels", overlay = true, max_boxes_count = 50, max_lines_count = 100, max_labels_count = 100)
+
+// ---------- โซน SMC / MSNR ----------
+g1 = "โซน SMC / MSNR"
+showZones = input.bool(true, "แสดงโซน", group = g1)
+tZone     = input.time(timestamp("2026-07-22 00:00 +0000"), "เริ่มวาดโซนจากวันที่", group = g1)
+obBearTop = input.float(4305, "Bearish OB บน",   group = g1)
+obBearBot = input.float(4259, "Bearish OB ล่าง", group = g1)
+fvgTop    = input.float(4248, "Bearish FVG บน",  group = g1)
+fvgBot    = input.float(4166, "Bearish FVG ล่าง", group = g1)
+msnrTop   = input.float(4140, "MSNR แนวรับ บน",  group = g1)
+msnrBot   = input.float(4119, "MSNR แนวรับ ล่าง", group = g1)
+obBullTop = input.float(4081, "Bullish OB+FVG บน",  group = g1)
+obBullBot = input.float(4027, "Bullish OB+FVG ล่าง", group = g1)
+sslTop    = input.float(4002, "Sell-side liquidity บน",  group = g1)
+sslBot    = input.float(3967, "Sell-side liquidity ล่าง", group = g1)
+
+g2 = "ระดับ MSNR / โครงสร้าง"
+lvV       = input.float(4278, "MSNR V ที่หลุด (แนวต้าน)", group = g2)
+lvA1      = input.float(4381, "MSNR A / swing high (จุดเปลี่ยนมุมมอง)", group = g2)
+lvA2      = input.float(4480, "MSNR A", group = g2)
+lvA3      = input.float(4675, "MSNR A / high", group = g2)
+
+// ---------- สถานการณ์ A: Sell จากโซน premium ----------
+g3 = "สถานการณ์ A: Sell ที่ OB/OTE"
+showA   = input.bool(true, "แสดงสถานการณ์ A", group = g3)
+aEntry  = input.float(4270, "Entry", group = g3)
+aSL     = input.float(4345, "SL", group = g3)
+aTP1    = input.float(4140, "TP1", group = g3)
+aTP2    = input.float(4081, "TP2", group = g3)
+aTP3    = input.float(4000, "TP3", group = g3)
+
+// ---------- สถานการณ์ B: Buy ที่แนวรับ MSNR (สวนเทรนด์) ----------
+g4 = "สถานการณ์ B: Buy ที่แนวรับ MSNR (สวนเทรนด์)"
+showB   = input.bool(true, "แสดงสถานการณ์ B", group = g4)
+bEntry  = input.float(4130, "Entry", group = g4)
+bSL     = input.float(4095, "SL", group = g4)
+bTP1    = input.float(4166, "TP1", group = g4)
+bTP2    = input.float(4248, "TP2", group = g4)
+
+// ---------- ฟังก์ชันวาด ----------
+cRed    = #e34948
+cOrange = #eb6834
+cBlue   = #2a78d6
+cGreen  = #1baf7a
+cViolet = #4a3aa7
+cGray   = #9a998f
+
+f_zone(top, bot, col, txt) =>
+    box.new(tZone, top, time, bot, xloc = xloc.bar_time, extend = extend.right,
+         border_color = color.new(col, 60), bgcolor = color.new(col, 85),
+         text = txt, text_size = size.small, text_color = col, text_halign = text.align.right)
+
+f_level(y, col, txt, sty) =>
+    line.new(bar_index - 1, y, bar_index, y, extend = extend.both, color = col, style = sty)
+    label.new(bar_index + 2, y, txt + "  " + str.tostring(y, "#.##"), style = label.style_none,
+         textcolor = col, size = size.small, textalign = text.align.left)
+
+f_trade(y, col, txt, x0) =>
+    line.new(x0, y, x0 + 25, y, color = col, width = 2)
+    label.new(x0 + 25, y, txt + " " + str.tostring(y, "#.##"), style = label.style_label_left,
+         color = col, textcolor = color.white, size = size.small)
+
+f_rr(entry, sl, tp) =>
+    str.tostring(math.abs(tp - entry) / math.abs(entry - sl), "#.#")
+
+var bool drawn = false
+if barstate.islast and not drawn
+    drawn := true
+    if showZones
+        f_zone(obBearTop, obBearBot, cRed,    "Bearish OB")
+        f_zone(fvgTop,    fvgBot,    cOrange, "Bearish FVG (open)")
+        f_zone(msnrTop,   msnrBot,   cBlue,   "MSNR: A-level flip → support (fresh)")
+        f_zone(obBullTop, obBullBot, cGreen,  "Bullish OB + FVG")
+        f_zone(sslTop,    sslBot,    cViolet, "Sell-side liquidity (equal lows)")
+        f_level(lvV,  cRed,  "MSNR V หลุด → แนวต้าน", line.style_dashed)
+        f_level(lvA1, cGray, "Invalidation: ปิดเหนือ = CHoCH ขาขึ้น", line.style_dotted)
+        f_level(lvA2, cGray, "MSNR A", line.style_dotted)
+        f_level(lvA3, cGray, "MSNR A / High", line.style_dotted)
+    if showA
+        x = bar_index + 5
+        f_trade(aEntry, cOrange, "A SELL Entry", x)
+        f_trade(aSL,    cRed,    "A SL", x)
+        f_trade(aTP1,   cGreen,  "A TP1 (RR " + f_rr(aEntry, aSL, aTP1) + ")", x)
+        f_trade(aTP2,   cGreen,  "A TP2 (RR " + f_rr(aEntry, aSL, aTP2) + ")", x)
+        f_trade(aTP3,   cGreen,  "A TP3 (RR " + f_rr(aEntry, aSL, aTP3) + ")", x)
+    if showB
+        x = bar_index + 45
+        f_trade(bEntry, cBlue,  "B BUY Entry", x)
+        f_trade(bSL,    cRed,   "B SL", x)
+        f_trade(bTP1,   cGreen, "B TP1 (RR " + f_rr(bEntry, bSL, bTP1) + ")", x)
+        f_trade(bTP2,   cGreen, "B TP2 (RR " + f_rr(bEntry, bSL, bTP2) + ")", x)
+
+// ---------- Alerts ----------
+alertcondition(ta.crossover(high, aEntry),  "A: ราคาถึงโซน Sell",       "XAUUSD แตะ Entry สถานการณ์ A — รอสัญญาณยืนยันใน TF เล็ก")
+alertcondition(ta.crossunder(low, bEntry),  "B: ราคาถึงแนวรับ MSNR",    "XAUUSD แตะ Entry สถานการณ์ B — รอสัญญาณยืนยันใน TF เล็ก")
+alertcondition(ta.crossunder(close, msnrBot), "ปิดใต้แนวรับ MSNR",     "XAUUSD ปิดใต้แนวรับ MSNR — สถานการณ์ B ใช้ไม่ได้")
+alertcondition(ta.crossover(close, lvA1),   "Invalidation ขาลง",        "XAUUSD ปิดเหนือระดับ invalidation — มุมมองขาลงใช้ไม่ได้")
